@@ -32,6 +32,9 @@ if [ "$FULL_BUILD" == "true" ]; then
   python "$BUILD_DIR/set_build.py"
 fi
 
+pip install git+https://github.com/lbryio/lbryschema.git
+pip install git+https://github.com/lbryio/lbryum.git@batched-resolve
+
 cp "$ROOT/requirements.txt" "$BUILD_DIR/requirements_base.txt"
 (
   cd "$BUILD_DIR"

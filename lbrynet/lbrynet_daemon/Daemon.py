@@ -788,9 +788,10 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self.session.wallet.resolve_uri(uri)
-        if 'claim' in resolved:
-            claim = ClaimDict.load_dict(resolved['claim']['value'])
+        resolved = yield self.session.wallet.resolve(True, 0, 0, uri)
+
+        if uri in resolved and 'claim' in resolved[uri]:
+            claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
             result = yield self._render_response(final_fee)
             defer.returnValue(result)
@@ -831,10 +832,11 @@ class Daemon(AuthJSONRPCServer):
         """
         Resolve a name and return the estimated stream cost
         """
-        try:
-            claim_response = yield self.session.wallet.resolve_uri(uri)
-        # TODO: fix me, this is a hack
-        except Exception:
+
+        resolved = yield self.session.wallet.resolve(True, 0, 0, uri)
+        if resolved:
+            claim_response = resolved[uri]
+        else:
             claim_response = None
 
         result = None
@@ -1456,19 +1458,22 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(force='-f')
-    def jsonrpc_resolve(self, uri, force=False):
+    def jsonrpc_resolve(self, force=False, uri=None, uris=[]):
         """
         Resolve a LBRY URI
 
         Usage:
-            resolve <uri> [-f]
+            resolve (<uri> | --uri=<uri>) [<uris>...] [-f]
 
         Options:
             -f  : force refresh and ignore cache
 
         Returns:
-            None if nothing can be resolved, otherwise:
-            If uri resolves to a channel or a claim in a channel:
+            None if nothing can be resolved. If only one uri was resolved, returns the
+            below format. It multiple uris are resolved, returns results as formatted below, keyed
+            by uri.
+
+            If the uri resolves to a channel or a claim in a channel:
                 'certificate': {
                     'address': (str) claim address,
                     'amount': (float) claim amount,
@@ -1488,29 +1493,8 @@ class Daemon(AuthJSONRPCServer):
                     'signature_is_valid': (bool), included if has_signature,
                     'value': ClaimDict if decoded, otherwise hex string
                 }
-            If uri resolves to a channel:
-                'claims_in_channel': [
-                    {
-                        'address': (str) claim address,
-                        'amount': (float) claim amount,
-                        'effective_amount': (float) claim amount including supports,
-                        'claim_id': (str) claim id,
-                        'claim_sequence': (int) claim sequence number,
-                        'decoded_claim': (bool) whether or not the claim value was decoded,
-                        'height': (int) claim height,
-                        'depth': (int) claim depth,
-                        'has_signature': (bool) included if decoded_claim
-                        'name': (str) claim name,
-                        'supports: (list) list of supports [{'txid': txid,
-                                                             'nout': nout,
-                                                             'amount': amount}],
-                        'txid': (str) claim txid,
-                        'nout': (str) claim nout,
-                        'signature_is_valid': (bool), included if has_signature,
-                        'value': ClaimDict if decoded, otherwise hex string
-                    }
-                ]
-            If uri resolves to a claim:
+
+            If the uri resolves to a claim:
                 'claim': {
                     'address': (str) claim address,
                     'amount': (float) claim amount,
@@ -1534,10 +1518,11 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        try:
-            resolved = yield self.session.wallet.resolve_uri(uri, check_cache=not force)
-        except Exception:
-            resolved = None
+        if uri is not None:
+            uris += (uri, )
+        resolved = yield self.session.wallet.resolve(not force, 0, 1, *uris)
+        if uri is not None and uris == (uri, ) and resolved:
+            resolved = resolved[uri]
         results = yield self._render_response(resolved)
         defer.returnValue(results)
 
@@ -1584,9 +1569,13 @@ class Daemon(AuthJSONRPCServer):
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
 
-        resolved = yield self.session.wallet.resolve_uri(uri)
+        resolved_result = yield self.session.wallet.resolve(True, 0, 0, uri)
+        if resolved_result and uri in resolved_result:
+            resolved = resolved_result[uri]
+        else:
+            resolved = None
 
-        if 'value' not in resolved:
+        if not resolved or 'value' not in resolved:
             if 'claim' not in resolved:
                 raise Exception("Nothing to download")
             else:
@@ -2642,12 +2631,13 @@ t
             sd_blob.close_read_handle(sd_blob_file)
             return decoded_sd_blob
 
-        try:
-            resolved = yield self.session.wallet.resolve_uri(uri)
-        except Exception:
+        resolved_result = yield self.session.wallet.resolve(True, 0, 0, uri)
+        if resolved_result and uri in resolved_result:
+            resolved = resolved_result[uri]
+        else:
             defer.returnValue(None)
 
-        if resolved and 'claim' in resolved:
+        if 'claim' in resolved:
             metadata = resolved['claim']['value']
         else:
             defer.returnValue(None)

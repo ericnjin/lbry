@@ -1526,6 +1526,90 @@ class Daemon(AuthJSONRPCServer):
         results = yield self._render_response(resolved)
         defer.returnValue(results)
 
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_channel_list(self, page=0, index=0, uri=None, uris=[]):
+        """
+        List claims in a channel by uri
+
+        Usage:
+            resolve (<uri> | --uri=<uri>) [<uris>...] [--page=<page>] [--index=<index>]
+
+        Options:
+            --page=<page>    : which page of results to return (page size: 10)
+            --index=<index>  : starting position in the pre-validation list of claims to begin
+                               validating pages of results from, allows skipping to the end
+                               position of a previous query
+
+        Returns:
+            None if nothing can be resolved. If only one uri was resolved, returns the
+            below format. It multiple uris are resolved, returns results as formatted below, keyed
+            by uri.
+
+            The channel claim:
+                'certificate': {
+                    'address': (str) claim address,
+                    'amount': (float) claim amount,
+                    'effective_amount': (float) claim amount including supports,
+                    'claim_id': (str) claim id,
+                    'claim_sequence': (int) claim sequence number,
+                    'decoded_claim': (bool) whether or not the claim value was decoded,
+                    'height': (int) claim height,
+                    'depth': (int) claim depth,
+                    'has_signature': (bool) included if decoded_claim
+                    'name': (str) claim name,
+                    'supports: (list) list of supports [{'txid': txid,
+                                                         'nout': nout,
+                                                         'amount': amount}],
+                    'txid': (str) claim txid,
+                    'nout': (str) claim nout,
+                    'signature_is_valid': (bool), included if has_signature,
+                    'value': ClaimDict if decoded, otherwise hex string
+                }
+
+            Page of claims in channel results:
+                'claims_in_channel': [
+                    {
+                        'absolute_channel_position': (int) claim index number in sorted list of
+                                                     claims which assert to be part of the channel
+                        'address': (str) claim address,
+                        'amount': (float) claim amount,
+                        'effective_amount': (float) claim amount including supports,
+                        'claim_id': (str) claim id,
+                        'claim_sequence': (int) claim sequence number,
+                        'decoded_claim': (bool) whether or not the claim value was decoded,
+                        'height': (int) claim height,
+                        'depth': (int) claim depth,
+                        'has_signature': (bool) included if decoded_claim
+                        'name': (str) claim name,
+                        'supports: (list) list of supports [{'txid': txid,
+                                                             'nout': nout,
+                                                             'amount': amount}],
+                        'txid': (str) claim txid,
+                        'nout': (str) claim nout,
+                        'signature_is_valid': (bool), included if has_signature,
+                        'value': ClaimDict if decoded, otherwise hex string
+                    }
+                ]
+        """
+
+        if uri is not None:
+            uris += (uri, )
+        for chan_uri in uris:
+            parsed = parse_lbry_uri(chan_uri)
+            if not parsed.is_channel:
+                raise Exception("%s is not a channel uri" % parsed.name)
+            elif parsed.path:
+                raise Exception("%s is a claim in a channel %i" % parsed.path)
+
+        resolved = yield self.session.wallet.resolve(False, page, index, *uris)
+        if uri is not None and uris == (uri, ) and resolved:
+            resolved = resolved[uri]
+        results = yield self._render_response(resolved)
+        defer.returnValue(results)
+
+
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_get(self, uri, file_name=None, timeout=None, download_directory=None):

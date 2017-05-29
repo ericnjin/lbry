@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Remove deprecated `lbrynet.metadata` and update what used it to instead use `lbryschema`
   *
 
 ### Fixed

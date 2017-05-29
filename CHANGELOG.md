@@ -13,12 +13,13 @@ at anytime.
   * Add `dht_status` parameter to `status` to include bandwidth and peer info
   *
   * Positional and flag arguments in lbrynet-cli
-  * 
+  * Add `channel_list` to list claims in a channel, supports multiple channel resolution
 
 ### Changed
   * Changed keyword arguments in lbrynet-cli to use a -- prefix
   * Using the help function in lbrynet-cli no longer requires lbrynet-daemon to be running
-
+  * `resolve` multiple uris, remove `claims_in_channel` from `resolve` response
+  
 ### Fixed
   *
   *
